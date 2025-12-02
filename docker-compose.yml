@@ -1,0 +1,52 @@
+services:
+  # Service gRPC de traitement PDF (backend)
+  pdf-processor:
+    container_name: pdf-processor
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      JWT_KEY: ${JWT_KEY}
+      # Optimisations OpenCV et NumPy pour meilleures performances
+      OMP_NUM_THREADS: "4"
+      OPENBLAS_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "4"
+      NUMEXPR_NUM_THREADS: "4"
+      ENABLE_DEBUG: "false"
+    # Port interne uniquement (non exposé publiquement)
+    expose:
+      - "50051"
+    volumes:
+      - ./debug:/app/debug
+      - pdf-temp-dev:/tmp
+    cpus: '8'
+    mem_limit: 16g
+    mem_reservation: 8g
+    networks:
+      - pdf-network
+
+  # Gateway FastAPI (frontend REST)
+  pdf-gateway:
+    container_name: pdf-gateway
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
+    environment:
+      GRPC_HOST: pdf-processor
+      GRPC_PORT: "50051"
+    ports:
+      - "8000:8000"
+    depends_on:
+      - pdf-processor
+    networks:
+      - pdf-network
+    # Ressources légères pour le gateway
+    cpus: '2'
+    mem_limit: 1g
+
+networks:
+  pdf-network:
+    driver: bridge
+
+volumes:
+  pdf-temp-dev:

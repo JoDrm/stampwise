@@ -1,0 +1,20 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+ENV PYTHONUNBUFFERED=1
+
+# Copier les requirements du gateway
+COPY requirements-gateway.txt .
+RUN pip install --no-cache-dir -r requirements-gateway.txt
+
+# Copier le code
+COPY api_gateway.py .
+COPY protos ./protos
+
+# Générer les fichiers protobuf
+RUN python -m grpc_tools.protoc -I./protos --python_out=. --grpc_python_out=. ./protos/pdf_service.proto
+
+EXPOSE 8000
+
+CMD ["uvicorn", "api_gateway:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package pdfservice;
+
+service PDFService {
+    rpc ProcessPDF (PDFRequest) returns (PDFResponse) {}
+}
+
+message GoogleDriveFile {
+    string id = 1;
+    string accessToken = 2;
+}
+
+message OoDriveFile {
+    string id = 1;
+    string accessToken = 2;
+}
+
+
+message PDFRequest {
+    string pdf_url = 1;
+    GoogleDriveFile googleDriveFile = 2;
+    string stamp_url = 3;
+    int32 document_index = 4;
+    string prefix = 5;
+    OoDriveFile ooDriveFile = 6;
+    bool stampOnlyFirstPage = 7;
+}
+
+
+message Coordinates {
+    int32 page_number = 1;
+    float x = 2;
+    float y = 3;
+    float size = 4;
+}
+
+message PDFResponse {
+    bytes processed_pdf = 1;
+    repeated Coordinates coordinates = 2;
+}
