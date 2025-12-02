@@ -1,195 +1,178 @@
-# @jodrm/stampwise
+# stampwise
 
-Client SDK TypeScript/JavaScript pour le service de tamponnage automatique de PDF.
+<p align="center">
+  <img src="https://img.shields.io/npm/v/stampwise?style=flat-square" alt="npm version" />
+  <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="license" />
+  <img src="https://img.shields.io/badge/typescript-5.0+-blue?style=flat-square" alt="typescript" />
+</p>
+
+<p align="center">
+  <b>SDK TypeScript pour le service de tamponnage automatique de PDF</b>
+</p>
+
+---
 
 ## Installation
 
 ```bash
-npm install @jodrm/stampwise
+npm install stampwise
 # ou
-yarn add @jodrm/stampwise
+yarn add stampwise
 # ou
-pnpm add @jodrm/stampwise
+pnpm add stampwise
 ```
 
-## Utilisation
-
-### Configuration
+## Quick Start
 
 ```typescript
-import { PdfStampClient } from '@jodrm/stampwise';
-
-const client = new PdfStampClient({
-  baseUrl: 'http://localhost:8000', // URL de votre service
-  timeout: 300000, // 5 minutes (optionnel)
-});
-```
-
-### Tamponner un PDF depuis une URL
-
-```typescript
+import { PdfStampClient } from 'stampwise';
 import fs from 'fs';
 
+const client = new PdfStampClient({
+  baseUrl: 'http://localhost:8000'
+});
+
+// Tamponner un PDF
 const result = await client.stamp({
   pdfUrl: 'https://example.com/document.pdf',
   stampUrl: 'https://example.com/stamp.png',
   documentIndex: 1,
-  prefix: 'DOC',
+  prefix: 'DOC'
 });
 
-// Sauvegarder le PDF tamponné
-fs.writeFileSync('document_tamponne.pdf', result.pdf);
-
-// Voir les positions des tampons
+// Sauvegarder le résultat
+fs.writeFileSync('stamped.pdf', result.pdf);
 console.log(`${result.pagesProcessed} pages traitées`);
-result.coordinates.forEach((coord) => {
-  console.log(`Page ${coord.pageNumber}: tampon à (${coord.x}, ${coord.y})`);
+```
+
+## Configuration
+
+```typescript
+const client = new PdfStampClient({
+  baseUrl: 'http://localhost:8000', // URL du service Stampwise
+  timeout: 300000,                   // Timeout en ms (défaut: 5 min)
+  headers: {                         // Headers personnalisés
+    'Authorization': 'Bearer token'
+  }
 });
 ```
 
-### Tamponner depuis Google Drive
+## API
+
+### `stamp(options): Promise<StampResult>`
+
+Tamponne un PDF et retourne le fichier résultant.
+
+```typescript
+interface StampOptions {
+  pdfUrl?: string;                    // URL du PDF
+  googleDrive?: {                     // Source Google Drive
+    fileId: string;
+    accessToken: string;
+  };
+  oodrive?: {                         // Source OoDrive
+    fileId: string;
+    accessToken: string;
+  };
+  stampUrl: string;                   // URL de l'image du tampon (PNG)
+  documentIndex?: number;             // Numéro de pièce (défaut: 1)
+  prefix?: string;                    // Préfixe (ex: "DOC")
+  stampOnlyFirstPage?: boolean;       // Tamponner uniquement page 1
+}
+
+interface StampResult {
+  pdf: Buffer;                        // PDF tamponné
+  coordinates: StampCoordinates[];    // Positions des tampons
+  pagesProcessed: number;             // Nombre de pages
+}
+```
+
+### `stampMetadata(options): Promise<StampMetadataResult>`
+
+Tamponne et retourne uniquement les métadonnées (sans le PDF).
+
+```typescript
+const metadata = await client.stampMetadata({
+  pdfUrl: 'https://example.com/doc.pdf',
+  stampUrl: 'https://example.com/stamp.png'
+});
+
+console.log(metadata.coordinates);
+// [{pageNumber: 1, x: 450, y: 50, size: 300}, ...]
+```
+
+### `health(): Promise<HealthStatus>`
+
+Vérifie l'état du service.
+
+```typescript
+const status = await client.health();
+console.log(status.grpcService); // "connected"
+```
+
+## Exemples
+
+### Depuis Google Drive
 
 ```typescript
 const result = await client.stamp({
   googleDrive: {
     fileId: '1abc123...',
-    accessToken: 'ya29.a0AfH6...',
+    accessToken: 'ya29.a0AfH6...'
   },
   stampUrl: 'https://example.com/stamp.png',
   documentIndex: 1,
-  prefix: 'PIECE',
+  prefix: 'PIECE'
 });
 ```
 
-### Tamponner depuis OoDrive
-
-```typescript
-const result = await client.stamp({
-  oodrive: {
-    fileId: 'file-id-123',
-    accessToken: 'token...',
-  },
-  stampUrl: 'https://example.com/stamp.png',
-  documentIndex: 1,
-});
-```
-
-### Tamponner uniquement la première page
+### Première page uniquement
 
 ```typescript
 const result = await client.stamp({
   pdfUrl: 'https://example.com/document.pdf',
   stampUrl: 'https://example.com/stamp.png',
-  documentIndex: 1,
-  stampOnlyFirstPage: true, // Seule la 1ère page sera tamponnée
+  stampOnlyFirstPage: true
 });
 ```
 
-### Obtenir uniquement les métadonnées
-
-Utile pour vérifier les positions avant de télécharger le PDF complet :
+### Gestion des erreurs
 
 ```typescript
-const metadata = await client.stampMetadata({
-  pdfUrl: 'https://example.com/document.pdf',
-  stampUrl: 'https://example.com/stamp.png',
-  documentIndex: 1,
-});
-
-console.log(metadata.success); // true
-console.log(metadata.pagesProcessed); // 10
-console.log(metadata.coordinates); // [{pageNumber: 1, x: 450, y: 50, size: 300}, ...]
-```
-
-### Vérifier l'état du service
-
-```typescript
-const health = await client.health();
-
-console.log(health.status); // "healthy"
-console.log(health.grpcService); // "connected"
-console.log(health.version); // "1.0.0"
-```
-
-## API Reference
-
-### `PdfStampClient`
-
-#### Constructor
-
-```typescript
-new PdfStampClient(config: PdfStampConfig)
-```
-
-| Option    | Type                       | Description                      |
-| --------- | -------------------------- | -------------------------------- |
-| `baseUrl` | `string`                   | URL du service PDF Stamp         |
-| `timeout` | `number`                   | Timeout en ms (défaut: 300000)   |
-| `headers` | `Record<string, string>`   | Headers HTTP personnalisés       |
-
-#### Methods
-
-##### `stamp(options: StampOptions): Promise<StampResult>`
-
-Tamponne un PDF et retourne le fichier résultant.
-
-##### `stampMetadata(options: StampOptions): Promise<StampMetadataResult>`
-
-Tamponne un PDF et retourne uniquement les métadonnées.
-
-##### `health(): Promise<HealthStatus>`
-
-Vérifie l'état du service.
-
-### Types
-
-#### `StampOptions`
-
-```typescript
-interface StampOptions {
-  pdfUrl?: string;
-  googleDrive?: { fileId: string; accessToken: string };
-  oodrive?: { fileId: string; accessToken: string };
-  stampUrl: string;
-  documentIndex?: number; // défaut: 1
-  prefix?: string; // défaut: ""
-  stampOnlyFirstPage?: boolean; // défaut: false
+try {
+  const result = await client.stamp({...});
+} catch (error) {
+  if (error.response?.status === 400) {
+    console.error('Requête invalide:', error.response.data);
+  } else if (error.response?.status === 500) {
+    console.error('Erreur serveur:', error.response.data);
+  } else {
+    console.error('Erreur réseau:', error.message);
+  }
 }
 ```
 
-#### `StampResult`
+## Prérequis
 
-```typescript
-interface StampResult {
-  pdf: Buffer;
-  coordinates: StampCoordinates[];
-  pagesProcessed: number;
-}
-```
-
-#### `StampCoordinates`
-
-```typescript
-interface StampCoordinates {
-  pageNumber: number;
-  x: number;
-  y: number;
-  size: number;
-}
-```
-
-## Déploiement du service
-
-Le service doit être déployé via Docker :
+Ce SDK nécessite le service Stampwise en cours d'exécution :
 
 ```bash
+# Cloner et lancer le service
+git clone https://github.com/jodrm/stampwise.git
+cd stampwise
 docker-compose up -d
+
+# Le service est disponible sur http://localhost:8000
 ```
 
-Cela démarre :
-- `pdf-processor` : Service gRPC de traitement (interne)
-- `pdf-gateway` : API REST FastAPI sur le port 8000
+## Documentation complète
+
+Voir le [repository principal](https://github.com/jodrm/stampwise) pour :
+- Documentation de l'API REST
+- Configuration avancée
+- Mode debug
+- Algorithme de détection
 
 ## License
 
-MIT
+MIT - voir [LICENSE](https://github.com/jodrm/stampwise/blob/main/LICENSE)

@@ -1,5 +1,5 @@
 {
-  "name": "@jodrm/stampwise",
+  "name": "stampwise",
   "version": "1.0.0",
   "description": "Client SDK pour le service de tamponnage automatique de PDF",
   "main": "dist/index.js",
