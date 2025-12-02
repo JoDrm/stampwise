@@ -3,12 +3,12 @@
 <p align="center">
   <img src="https://img.shields.io/npm/v/stampwise?style=flat-square" alt="npm version" />
   <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="license" />
-  <img src="https://img.shields.io/badge/python-3.11+-green?style=flat-square" alt="python" />
+  <img src="https://img.shields.io/badge/python-3.8+-green?style=flat-square" alt="python" />
   <img src="https://img.shields.io/badge/node-16+-green?style=flat-square" alt="node" />
 </p>
 
 <p align="center">
-  <b>Service intelligent de tamponnage automatique de documents PDF</b>
+  <b>Tamponnage intelligent et automatique de documents PDF</b>
 </p>
 
 <p align="center">
@@ -20,252 +20,194 @@
 
 ## Fonctionnalités
 
+- **100% autonome** - Pas de serveur externe requis
 - **Détection intelligente** des espaces blancs sur chaque page
 - **Évitement automatique** du texte, images, QR codes et tableaux
 - **Taille adaptative** du tampon selon l'espace disponible (90-300px)
 - **Numérotation** automatique des pièces (ex: "Pièce n° DOC-1")
-- **Multi-sources** : URL directe, Google Drive, OoDrive
-- **API REST** simple avec documentation Swagger
-- **SDK TypeScript** pour intégration Node.js
-- **Haute performance** : traitement parallèle, optimisé pour les gros fichiers
+- **Multi-plateforme** - macOS, Linux, Windows
+- **Haute performance** - Traitement parallèle optimisé
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                     Votre Application                   │
-│              npm install stampwise                      │
+│              import { stampPdf } from 'stampwise'       │
 └──────────────────────┬──────────────────────────────────┘
-                       │ HTTP/REST
+                       │ child_process (local)
 ┌──────────────────────▼──────────────────────────────────┐
-│                  API Gateway (FastAPI)                  │
-│                    Port 8000                            │
-│              Swagger UI: /docs                          │
-└──────────────────────┬──────────────────────────────────┘
-                       │ gRPC (interne)
-┌──────────────────────▼──────────────────────────────────┐
-│               PDF Processor (Python)                    │
-│         OpenCV • NumPy • PyMuPDF • Tesseract           │
+│               Python Processor (embarqué)               │
+│         OpenCV • NumPy • PyMuPDF • pdf2image           │
 └─────────────────────────────────────────────────────────┘
 ```
 
-## Démarrage rapide
+## Prérequis
 
-### 1. Cloner le repository
+- **Node.js** 16+
+- **Python** 3.8+
+- **Poppler** (pour pdf2image)
 
-```bash
-git clone https://github.com/jodrm/stampwise.git
-cd stampwise
-```
-
-### 2. Lancer les services
+### Installation de Poppler
 
 ```bash
-docker-compose up -d
+# macOS
+brew install poppler
+
+# Ubuntu/Debian
+sudo apt-get install poppler-utils
+
+# Windows
+# Télécharger depuis: https://github.com/oschwartz10612/poppler-windows/releases
 ```
 
-Les services démarrent :
-- **API REST** : http://localhost:8000
-- **Swagger UI** : http://localhost:8000/docs
-
-### 3. Tester l'API
-
-```bash
-curl -X POST "http://localhost:8000/stamp" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "pdf_url": "https://example.com/document.pdf",
-    "stamp_url": "https://example.com/stamp.png",
-    "document_index": 1,
-    "prefix": "DOC"
-  }' \
-  --output stamped.pdf
-```
-
-## Utilisation avec le SDK Node.js
-
-### Installation
+## Installation
 
 ```bash
 npm install stampwise
 ```
 
-### Exemple
+Les dépendances Python sont installées automatiquement.
+
+## Utilisation
+
+### API simple
 
 ```typescript
-import { PdfStampClient } from 'stampwise';
-import fs from 'fs';
+import { stampPdf } from 'stampwise';
 
-const client = new PdfStampClient({
-  baseUrl: 'http://localhost:8000'
-});
-
-// Tamponner un PDF
-const result = await client.stamp({
-  pdfUrl: 'https://example.com/document.pdf',
-  stampUrl: 'https://example.com/stamp.png',
+const result = await stampPdf({
+  pdfPath: './document.pdf',
+  stampPath: './stamp.png',
+  outputPath: './output.pdf',
   documentIndex: 1,
-  prefix: 'PIECE'
+  prefix: 'DOC'
 });
 
-// Sauvegarder le résultat
-fs.writeFileSync('document_tamponne.pdf', result.pdf);
+console.log(`PDF généré: ${result.outputPath}`);
+console.log(`${result.pagesProcessed} pages traitées`);
+```
+
+### API complète
+
+```typescript
+import { Stampwise } from 'stampwise';
+
+const stampwise = new Stampwise({
+  pythonPath: '/usr/bin/python3',  // Optionnel
+  fontsDir: './fonts'               // Optionnel
+});
+
+const result = await stampwise.stamp({
+  pdfPath: './facture.pdf',
+  stampPath: './tampon.png',
+  outputPath: './facture_tamponnee.pdf',
+  documentIndex: 1,
+  prefix: 'PIECE',
+  stampOnlyFirstPage: false
+});
 
 // Afficher les positions des tampons
-console.log(`${result.pagesProcessed} pages traitées`);
 result.coordinates.forEach((coord) => {
   console.log(`Page ${coord.pageNumber}: tampon à (${coord.x}, ${coord.y}), taille: ${coord.size}px`);
 });
 ```
 
-### Sources supportées
+### Avec des Buffers
 
 ```typescript
-// Depuis une URL
-await client.stamp({
-  pdfUrl: 'https://example.com/doc.pdf',
-  stampUrl: 'https://example.com/stamp.png',
-  documentIndex: 1
-});
+import { Stampwise } from 'stampwise';
+import fs from 'fs';
 
-// Depuis Google Drive
-await client.stamp({
-  googleDrive: {
-    fileId: '1abc123...',
-    accessToken: 'ya29.a0AfH6...'
-  },
-  stampUrl: 'https://example.com/stamp.png',
-  documentIndex: 1
-});
+const stampwise = new Stampwise();
 
-// Depuis OoDrive
-await client.stamp({
-  oodrive: {
-    fileId: 'file-id',
-    accessToken: 'token...'
-  },
-  stampUrl: 'https://example.com/stamp.png',
-  documentIndex: 1
-});
+const pdfBuffer = fs.readFileSync('./document.pdf');
+const stampBuffer = fs.readFileSync('./stamp.png');
 
-// Première page uniquement
-await client.stamp({
-  pdfUrl: 'https://example.com/doc.pdf',
-  stampUrl: 'https://example.com/stamp.png',
+const result = await stampwise.stampBuffer(pdfBuffer, stampBuffer, {
   documentIndex: 1,
-  stampOnlyFirstPage: true
+  prefix: 'DOC'
+});
+
+// result.pdf est un Buffer
+fs.writeFileSync('./output.pdf', result.pdf);
+```
+
+### Première page uniquement
+
+```typescript
+const result = await stampPdf({
+  pdfPath: './document.pdf',
+  stampPath: './stamp.png',
+  outputPath: './output.pdf',
+  documentIndex: 1,
+  stampOnlyFirstPage: true  // Seule la 1ère page sera tamponnée
 });
 ```
 
 ## API Reference
 
-### Endpoints
+### `stampPdf(options): Promise<StampResult>`
 
-| Méthode | Endpoint | Description |
-|---------|----------|-------------|
-| `GET` | `/health` | État du service |
-| `POST` | `/stamp` | Tamponne un PDF et retourne le fichier |
-| `POST` | `/stamp/metadata` | Tamponne et retourne uniquement les métadonnées |
+Fonction raccourcie pour tamponner un PDF.
 
-### POST /stamp
+### `Stampwise`
 
-**Request Body**
+Classe principale avec configuration avancée.
 
-```json
-{
-  "pdf_url": "https://example.com/document.pdf",
-  "google_drive": {
-    "file_id": "1abc...",
-    "access_token": "ya29..."
-  },
-  "oodrive": {
-    "file_id": "...",
-    "access_token": "..."
-  },
-  "stamp_url": "https://example.com/stamp.png",
-  "document_index": 1,
-  "prefix": "DOC",
-  "stamp_only_first_page": false
+#### Constructor
+
+```typescript
+new Stampwise(config?: StampwiseConfig)
+```
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `pythonPath` | `string` | Chemin vers Python (défaut: auto-détecté) |
+| `fontsDir` | `string` | Répertoire des polices personnalisées |
+
+#### `stamp(options): Promise<StampResult>`
+
+| Option | Type | Requis | Description |
+|--------|------|--------|-------------|
+| `pdfPath` | `string` | ✓ | Chemin du PDF source |
+| `stampPath` | `string` | ✓ | Chemin de l'image du tampon (PNG) |
+| `outputPath` | `string` | ✓ | Chemin du PDF de sortie |
+| `documentIndex` | `number` | | Numéro de pièce (défaut: 1) |
+| `prefix` | `string` | | Préfixe (ex: "DOC") |
+| `stampOnlyFirstPage` | `boolean` | | Tamponner uniquement la 1ère page |
+
+#### `stampBuffer(pdfBuffer, stampBuffer, options)`
+
+Tamponne un PDF depuis des Buffers.
+
+### Types
+
+```typescript
+interface StampResult {
+  success: boolean;
+  outputPath: string;
+  coordinates: StampCoordinates[];
+  pagesProcessed: number;
+}
+
+interface StampCoordinates {
+  pageNumber: number;
+  x: number;
+  y: number;
+  size: number;
 }
 ```
 
-| Champ | Type | Requis | Description |
-|-------|------|--------|-------------|
-| `pdf_url` | string | * | URL du PDF source |
-| `google_drive` | object | * | Source Google Drive |
-| `oodrive` | object | * | Source OoDrive |
-| `stamp_url` | string | ✓ | URL de l'image du tampon (PNG) |
-| `document_index` | integer | | Numéro de la pièce (défaut: 1) |
-| `prefix` | string | | Préfixe de numérotation |
-| `stamp_only_first_page` | boolean | | Tamponner uniquement la 1ère page |
-
-\* Au moins une source PDF requise
-
-**Response**
-
-- `200 OK` : PDF tamponné (application/pdf)
-- Headers :
-  - `X-Stamp-Coordinates` : JSON des positions
-  - `X-Pages-Processed` : Nombre de pages
-
-## Configuration
-
-### Variables d'environnement
-
-| Variable | Description | Défaut |
-|----------|-------------|--------|
-| `GRPC_HOST` | Host du service gRPC | `localhost` |
-| `GRPC_PORT` | Port du service gRPC | `50051` |
-| `JWT_KEY` | Clé secrète JWT | - |
-| `ENABLE_DEBUG` | Active les images de debug | `false` |
-| `OMP_NUM_THREADS` | Threads OpenCV | `4` |
-
-### Ressources Docker
-
-```yaml
-# docker-compose.yml
-services:
-  pdf-processor:
-    cpus: '8'
-    mem_limit: 16g
-    mem_reservation: 8g
-```
-
-Ajustez selon votre serveur. Recommandations :
-- **Petits fichiers** (<20 pages) : 2 CPU, 4GB RAM
-- **Fichiers moyens** (20-100 pages) : 4 CPU, 8GB RAM
-- **Gros fichiers** (>100 pages) : 8 CPU, 16GB RAM
-
-## Mode Debug
-
-Pour visualiser où l'algorithme place les tampons :
-
-```bash
-# Activer le debug
-ENABLE_DEBUG=true docker-compose up -d
-
-# Les images sont sauvegardées dans ./debug/
-ls debug/
-# debug_page_001.png
-# debug_page_002.png
-# ...
-```
-
-Les images montrent :
-- 🔴 **Rouge** : Zones de texte détectées
-- 🔵 **Bleu** : Images détectées
-- 🟣 **Magenta** : QR codes détectés
-- 🟢 **Vert** : Position du tampon
-
 ## Algorithme de détection
 
-Stampwise utilise plusieurs techniques pour trouver l'emplacement optimal :
+Stampwise utilise OpenCV et des techniques de vision par ordinateur :
 
-1. **Détection du texte** : Analyse morphologique OpenCV + OCR optionnel (Tesseract)
-2. **Détection des images** : Analyse du Laplacien pour les zones à forte variation
-3. **Détection des QR codes** : Recherche de contours carrés avec variance élevée
-4. **Détection des lignes** : Traits de séparation horizontaux/verticaux
-5. **Recherche de zone** : Balayage adaptatif pour trouver une zone 95-98% blanche
+1. **Détection du texte** - Analyse morphologique (kernels horizontaux/verticaux)
+2. **Détection des images** - Analyse du Laplacien pour les zones à forte variation
+3. **Détection des QR codes** - Recherche de contours carrés avec variance élevée
+4. **Détection des lignes** - Traits de séparation horizontaux/verticaux
+5. **Recherche de zone** - Balayage adaptatif pour trouver une zone 95-98% blanche
 
 L'algorithme priorise :
 1. Zone totalement libre de taille maximale (300px)
@@ -279,58 +221,81 @@ L'algorithme priorise :
 
 ```
 stampwise/
-├── server.py              # Service gRPC principal
-├── api_gateway.py         # Gateway FastAPI
-├── jwt_service.py         # Authentification JWT
-├── docker-compose.yml     # Orchestration Docker
-├── Dockerfile             # Image du processor
-├── Dockerfile.gateway     # Image du gateway
-├── protos/
-│   └── pdf_service.proto  # Définition gRPC
 ├── packages/
-│   └── client-node/       # SDK TypeScript
-│       ├── src/index.ts
-│       └── package.json
-└── fonts/                 # Polices pour le texte
+│   └── client-node/           # SDK NPM
+│       ├── src/index.ts       # SDK TypeScript
+│       ├── python/
+│       │   ├── processor.py   # Moteur de traitement
+│       │   └── requirements.txt
+│       └── scripts/
+│           └── postinstall.js # Installation auto
+├── server.py                  # Service gRPC (optionnel)
+├── api_gateway.py             # API REST (optionnel)
+├── docker-compose.yml         # Déploiement Docker
+└── fonts/                     # Polices pour le texte
 ```
 
-### Lancer en développement
+### Setup local
 
 ```bash
-# Service Python seul
-pip install -r requirements.txt
-python server.py
-
-# Gateway seul
-pip install -r requirements-gateway.txt
-uvicorn api_gateway:app --reload --port 8000
+# Cloner le repo
+git clone https://github.com/jodrm/stampwise.git
+cd stampwise
 
 # SDK Node.js
 cd packages/client-node
 npm install
 npm run build
+
+# Tester
+npm test
 ```
 
-### Tests
+### Mode Docker (optionnel)
+
+Pour déployer comme service REST :
 
 ```bash
-# Tester l'API
-curl http://localhost:8000/health
+docker-compose up -d
+# API disponible sur http://localhost:8000
+# Swagger UI sur http://localhost:8000/docs
+```
 
-# Tester avec un PDF
-curl -X POST "http://localhost:8000/stamp" \
-  -H "Content-Type: application/json" \
-  -d '{"pdf_url": "...", "stamp_url": "..."}' \
-  --output test.pdf
+## Dépannage
+
+### Python non trouvé
+
+```bash
+# Vérifier l'installation
+python3 --version
+
+# Spécifier le chemin manuellement
+const stampwise = new Stampwise({
+  pythonPath: '/chemin/vers/python3'
+});
+```
+
+### Poppler non trouvé
+
+```
+Error: Unable to get page count. Is poppler installed?
+```
+
+Voir section [Installation de Poppler](#installation-de-poppler).
+
+### Dépendances Python manquantes
+
+```bash
+pip3 install PyMuPDF numpy opencv-python-headless pdf2image Pillow img2pdf
 ```
 
 ## Contribuer
 
-Les contributions sont les bienvenues !
+Les contributions sont les bienvenues ! Voir [CONTRIBUTING.md](CONTRIBUTING.md).
 
 1. Fork le projet
 2. Créez votre branche (`git checkout -b feature/amazing-feature`)
-3. Committez vos changements (`git commit -m 'Add amazing feature'`)
+3. Committez vos changements (`git commit -m 'feat: add amazing feature'`)
 4. Push sur la branche (`git push origin feature/amazing-feature`)
 5. Ouvrez une Pull Request
 
@@ -338,10 +303,11 @@ Les contributions sont les bienvenues !
 
 MIT - voir [LICENSE](LICENSE) pour plus de détails.
 
-## Support
+## Liens
 
-- **Issues** : [GitHub Issues](https://github.com/jodrm/stampwise/issues)
-- **Discussions** : [GitHub Discussions](https://github.com/jodrm/stampwise/discussions)
+- [npm](https://www.npmjs.com/package/stampwise)
+- [GitHub](https://github.com/jodrm/stampwise)
+- [Issues](https://github.com/jodrm/stampwise/issues)
 
 ---
 

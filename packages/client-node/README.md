@@ -3,176 +3,222 @@
 <p align="center">
   <img src="https://img.shields.io/npm/v/stampwise?style=flat-square" alt="npm version" />
   <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="license" />
-  <img src="https://img.shields.io/badge/typescript-5.0+-blue?style=flat-square" alt="typescript" />
+  <img src="https://img.shields.io/badge/node-16+-green?style=flat-square" alt="node" />
+  <img src="https://img.shields.io/badge/python-3.8+-blue?style=flat-square" alt="python" />
 </p>
 
 <p align="center">
-  <b>SDK TypeScript pour le service de tamponnage automatique de PDF</b>
+  <b>Tamponnage intelligent et automatique de documents PDF</b>
+</p>
+
+<p align="center">
+  Stampwise analyse vos PDF, détecte les zones blanches disponibles<br/>
+  et place intelligemment vos tampons sans chevaucher le contenu existant.
 </p>
 
 ---
+
+## Fonctionnalités
+
+- **100% autonome** - Pas de serveur externe requis
+- **Détection intelligente** des espaces blancs sur chaque page
+- **Évitement automatique** du texte, images, QR codes et tableaux
+- **Taille adaptative** du tampon selon l'espace disponible
+- **Numérotation** automatique des pièces (ex: "Pièce n° DOC-1")
+- **Multi-plateforme** - macOS, Linux, Windows
+
+## Prérequis
+
+- **Node.js** 16+
+- **Python** 3.8+
+- **Poppler** (pour pdf2image)
+
+### Installation de Poppler
+
+```bash
+# macOS
+brew install poppler
+
+# Ubuntu/Debian
+sudo apt-get install poppler-utils
+
+# Windows
+# Télécharger depuis: https://github.com/oschwartz10612/poppler-windows/releases
+```
 
 ## Installation
 
 ```bash
 npm install stampwise
-# ou
-yarn add stampwise
-# ou
-pnpm add stampwise
 ```
 
-## Quick Start
+Les dépendances Python sont installées automatiquement lors du `npm install`.
+
+## Utilisation
+
+### API simple
 
 ```typescript
-import { PdfStampClient } from 'stampwise';
-import fs from 'fs';
+import { stampPdf } from 'stampwise';
 
-const client = new PdfStampClient({
-  baseUrl: 'http://localhost:8000'
-});
-
-// Tamponner un PDF
-const result = await client.stamp({
-  pdfUrl: 'https://example.com/document.pdf',
-  stampUrl: 'https://example.com/stamp.png',
+const result = await stampPdf({
+  pdfPath: './document.pdf',
+  stampPath: './stamp.png',
+  outputPath: './output.pdf',
   documentIndex: 1,
   prefix: 'DOC'
 });
 
-// Sauvegarder le résultat
-fs.writeFileSync('stamped.pdf', result.pdf);
+console.log(`PDF généré: ${result.outputPath}`);
 console.log(`${result.pagesProcessed} pages traitées`);
 ```
 
-## Configuration
+### API complète
 
 ```typescript
-const client = new PdfStampClient({
-  baseUrl: 'http://localhost:8000', // URL du service Stampwise
-  timeout: 300000,                   // Timeout en ms (défaut: 5 min)
-  headers: {                         // Headers personnalisés
-    'Authorization': 'Bearer token'
-  }
-});
-```
+import { Stampwise } from 'stampwise';
 
-## API
-
-### `stamp(options): Promise<StampResult>`
-
-Tamponne un PDF et retourne le fichier résultant.
-
-```typescript
-interface StampOptions {
-  pdfUrl?: string;                    // URL du PDF
-  googleDrive?: {                     // Source Google Drive
-    fileId: string;
-    accessToken: string;
-  };
-  oodrive?: {                         // Source OoDrive
-    fileId: string;
-    accessToken: string;
-  };
-  stampUrl: string;                   // URL de l'image du tampon (PNG)
-  documentIndex?: number;             // Numéro de pièce (défaut: 1)
-  prefix?: string;                    // Préfixe (ex: "DOC")
-  stampOnlyFirstPage?: boolean;       // Tamponner uniquement page 1
-}
-
-interface StampResult {
-  pdf: Buffer;                        // PDF tamponné
-  coordinates: StampCoordinates[];    // Positions des tampons
-  pagesProcessed: number;             // Nombre de pages
-}
-```
-
-### `stampMetadata(options): Promise<StampMetadataResult>`
-
-Tamponne et retourne uniquement les métadonnées (sans le PDF).
-
-```typescript
-const metadata = await client.stampMetadata({
-  pdfUrl: 'https://example.com/doc.pdf',
-  stampUrl: 'https://example.com/stamp.png'
+const stampwise = new Stampwise({
+  pythonPath: '/usr/bin/python3',  // Optionnel
+  fontsDir: './fonts'               // Optionnel
 });
 
-console.log(metadata.coordinates);
-// [{pageNumber: 1, x: 450, y: 50, size: 300}, ...]
-```
-
-### `health(): Promise<HealthStatus>`
-
-Vérifie l'état du service.
-
-```typescript
-const status = await client.health();
-console.log(status.grpcService); // "connected"
-```
-
-## Exemples
-
-### Depuis Google Drive
-
-```typescript
-const result = await client.stamp({
-  googleDrive: {
-    fileId: '1abc123...',
-    accessToken: 'ya29.a0AfH6...'
-  },
-  stampUrl: 'https://example.com/stamp.png',
+const result = await stampwise.stamp({
+  pdfPath: './facture.pdf',
+  stampPath: './tampon.png',
+  outputPath: './facture_tamponnee.pdf',
   documentIndex: 1,
-  prefix: 'PIECE'
+  prefix: 'PIECE',
+  stampOnlyFirstPage: false
+});
+
+// Afficher les positions des tampons
+result.coordinates.forEach((coord) => {
+  console.log(`Page ${coord.pageNumber}: tampon à (${coord.x}, ${coord.y}), taille: ${coord.size}px`);
 });
 ```
 
-### Première page uniquement
+### Avec des Buffers
 
 ```typescript
-const result = await client.stamp({
-  pdfUrl: 'https://example.com/document.pdf',
-  stampUrl: 'https://example.com/stamp.png',
-  stampOnlyFirstPage: true
+import { Stampwise } from 'stampwise';
+import fs from 'fs';
+
+const stampwise = new Stampwise();
+
+const pdfBuffer = fs.readFileSync('./document.pdf');
+const stampBuffer = fs.readFileSync('./stamp.png');
+
+const result = await stampwise.stampBuffer(pdfBuffer, stampBuffer, {
+  documentIndex: 1,
+  prefix: 'DOC'
 });
+
+// result.pdf est un Buffer
+fs.writeFileSync('./output.pdf', result.pdf);
 ```
 
-### Gestion des erreurs
+## API Reference
+
+### `stampPdf(options)`
+
+Fonction raccourcie pour tamponner un PDF.
+
+### `Stampwise`
+
+Classe principale avec configuration avancée.
+
+#### Constructor
 
 ```typescript
-try {
-  const result = await client.stamp({...});
-} catch (error) {
-  if (error.response?.status === 400) {
-    console.error('Requête invalide:', error.response.data);
-  } else if (error.response?.status === 500) {
-    console.error('Erreur serveur:', error.response.data);
-  } else {
-    console.error('Erreur réseau:', error.message);
-  }
+new Stampwise(config?: StampwiseConfig)
+```
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `pythonPath` | `string` | Chemin vers Python (défaut: auto-détecté) |
+| `fontsDir` | `string` | Répertoire des polices personnalisées |
+
+#### `stamp(options): Promise<StampResult>`
+
+Tamponne un PDF.
+
+| Option | Type | Requis | Description |
+|--------|------|--------|-------------|
+| `pdfPath` | `string` | ✓ | Chemin du PDF source |
+| `stampPath` | `string` | ✓ | Chemin de l'image du tampon |
+| `outputPath` | `string` | ✓ | Chemin du PDF de sortie |
+| `documentIndex` | `number` | | Numéro de pièce (défaut: 1) |
+| `prefix` | `string` | | Préfixe (ex: "DOC") |
+| `stampOnlyFirstPage` | `boolean` | | Tamponner uniquement la 1ère page |
+
+#### `stampBuffer(pdfBuffer, stampBuffer, options)`
+
+Tamponne un PDF depuis des Buffers.
+
+### Types
+
+```typescript
+interface StampResult {
+  success: boolean;
+  outputPath: string;
+  coordinates: StampCoordinates[];
+  pagesProcessed: number;
+}
+
+interface StampCoordinates {
+  pageNumber: number;
+  x: number;
+  y: number;
+  size: number;
 }
 ```
 
-## Prérequis
+## Algorithme
 
-Ce SDK nécessite le service Stampwise en cours d'exécution :
+Stampwise utilise OpenCV et des techniques de vision par ordinateur pour :
+
+1. **Détecter le texte** via analyse morphologique
+2. **Détecter les images** via analyse du Laplacien
+3. **Détecter les lignes** de séparation et tableaux
+4. **Trouver une zone blanche** optimale (95%+ blanc)
+5. **Adapter la taille** du tampon à l'espace disponible (90-300px)
+
+## Dépannage
+
+### Python non trouvé
 
 ```bash
-# Cloner et lancer le service
-git clone https://github.com/jodrm/stampwise.git
-cd stampwise
-docker-compose up -d
+# Vérifier l'installation
+python3 --version
 
-# Le service est disponible sur http://localhost:8000
+# Si Python n'est pas dans le PATH, spécifiez le chemin:
+const stampwise = new Stampwise({
+  pythonPath: '/chemin/vers/python3'
+});
 ```
 
-## Documentation complète
+### Poppler non trouvé
 
-Voir le [repository principal](https://github.com/jodrm/stampwise) pour :
-- Documentation de l'API REST
-- Configuration avancée
-- Mode debug
-- Algorithme de détection
+```
+Error: Unable to get page count. Is poppler installed?
+```
+
+Installez Poppler (voir section Prérequis).
+
+### Dépendances Python manquantes
+
+```bash
+# Installation manuelle
+pip3 install PyMuPDF numpy opencv-python-headless pdf2image Pillow img2pdf
+```
 
 ## License
 
 MIT - voir [LICENSE](https://github.com/jodrm/stampwise/blob/main/LICENSE)
+
+## Liens
+
+- [GitHub](https://github.com/jodrm/stampwise)
+- [Issues](https://github.com/jodrm/stampwise/issues)
+- [npm](https://www.npmjs.com/package/stampwise)

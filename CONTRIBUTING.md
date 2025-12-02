@@ -15,7 +15,7 @@ Ce projet adhère au [Contributor Covenant](https://www.contributor-covenant.org
    - Un titre clair et descriptif
    - Les étapes pour reproduire le bug
    - Le comportement attendu vs le comportement observé
-   - Votre environnement (OS, versions Python/Node.js, Docker)
+   - Votre environnement (OS, versions Python/Node.js)
    - Si possible, un PDF de test (anonymisé)
 
 ### Suggérer une amélioration
@@ -33,18 +33,14 @@ Ce projet adhère au [Contributor Covenant](https://www.contributor-covenant.org
 git clone https://github.com/jodrm/stampwise.git
 cd stampwise
 
-# Créer un environnement virtuel Python
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# ou venv\Scripts\activate  # Windows
+# Installer Poppler (requis)
+# macOS: brew install poppler
+# Ubuntu: sudo apt-get install poppler-utils
 
-# Installer les dépendances
-pip install -r requirements.txt
-pip install -r requirements-gateway.txt
-
-# Pour le SDK Node.js
+# SDK Node.js
 cd packages/client-node
 npm install
+npm run build
 ```
 
 #### Workflow
@@ -59,11 +55,9 @@ npm install
 3. **Faites vos modifications**
 4. **Testez** vos changements :
    ```bash
-   # Lancer les services
-   docker-compose up -d
-
-   # Tester l'API
-   curl http://localhost:8000/health
+   cd packages/client-node
+   npm run build
+   npm test
    ```
 5. **Committez** avec un message clair :
    ```bash
@@ -90,6 +84,7 @@ Nous suivons [Conventional Commits](https://www.conventionalcommits.org/) :
 - `chore:` Maintenance (deps, build, etc.)
 
 Exemples :
+
 ```
 feat: ajoute le support des PDF cryptés
 fix: corrige le placement du tampon sur les pages paysage
@@ -100,11 +95,13 @@ refactor: optimise la détection des zones blanches
 #### Standards de code
 
 **Python**
+
 - Suivre PEP 8
 - Docstrings pour les fonctions publiques
 - Type hints quand pertinent
 
 **TypeScript**
+
 - ESLint + Prettier
 - Types explicites (pas de `any`)
 - JSDoc pour les exports publics
@@ -121,25 +118,80 @@ refactor: optimise la détection des zones blanches
 
 ```
 stampwise/
-├── server.py              # Logique principale de traitement PDF
-├── api_gateway.py         # API REST FastAPI
-├── jwt_service.py         # Authentification
-├── protos/                # Définitions gRPC
 ├── packages/
-│   └── client-node/       # SDK TypeScript
-├── fonts/                 # Polices embarquées
-└── debug/                 # Images de debug (gitignored)
+│   └── client-node/               # SDK NPM (package principal)
+│       ├── src/
+│       │   └── index.ts           # SDK TypeScript
+│       ├── python/
+│       │   ├── processor.py       # Moteur de traitement PDF
+│       │   └── requirements.txt   # Dépendances Python
+│       ├── scripts/
+│       │   └── postinstall.js     # Installation automatique
+│       └── package.json
+├── server.py                      # Service gRPC (optionnel, Docker)
+├── api_gateway.py                 # API REST FastAPI (optionnel, Docker)
+├── docker-compose.yml             # Déploiement Docker
+├── fonts/                         # Polices embarquées
+└── debug/                         # Images de debug (gitignored)
 ```
 
 ### Points d'entrée pour contribuer
 
 | Domaine | Fichier | Difficulté |
 |---------|---------|------------|
-| Améliorer la détection | `server.py` → `find_whitest_space()` | Moyenne |
-| Ajouter un endpoint | `api_gateway.py` | Facile |
+| Améliorer la détection | `packages/client-node/python/processor.py` → `find_whitest_space()` | Moyenne |
 | Améliorer le SDK | `packages/client-node/src/index.ts` | Facile |
-| Optimiser les performances | `server.py` → `_process_single_page()` | Difficile |
-| Ajouter une source (Dropbox, etc.) | `server.py` + `api_gateway.py` | Moyenne |
+| Ajouter des options | `processor.py` + `index.ts` | Facile |
+| Optimiser les performances | `processor.py` → `_process_single_page()` | Difficile |
+| Support nouveaux formats | `processor.py` | Moyenne |
+
+## Tests
+
+### Tester le SDK
+
+```bash
+cd packages/client-node
+npm run build
+
+# Test manuel
+node -e "
+const { stampPdf } = require('./dist');
+stampPdf({
+  pdfPath: './test.pdf',
+  stampPath: './stamp.png',
+  outputPath: './output.pdf'
+}).then(console.log).catch(console.error);
+"
+```
+
+### Tester le processeur Python directement
+
+```bash
+cd packages/client-node/python
+
+python3 processor.py \
+  --pdf ./test.pdf \
+  --stamp ./stamp.png \
+  --output ./output.pdf \
+  --index 1 \
+  --prefix DOC \
+  --json
+```
+
+## Mode Docker (optionnel)
+
+Pour contribuer au service REST/gRPC :
+
+```bash
+# Lancer les services
+docker-compose up -d
+
+# Tester l'API
+curl http://localhost:8000/health
+
+# Logs
+docker-compose logs -f
+```
 
 ## Besoin d'aide ?
 
